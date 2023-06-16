@@ -154,4 +154,69 @@ function deletePost(req, res) {
   );
 }
 
-module.exports = { getPosts, getPost, createPost, deletePost };
+function updatePost(req, res) {
+  const { user } = res.locals;
+  const { postId } = req.params;
+  const { categoryId, body } = req.body;
+
+  if (!categoryId) {
+    return res
+      .json({
+        error: true,
+        message: "CATEGORY_ID_REQUIRED",
+      })
+      .status(400);
+  }
+
+  if (!body?.trim()) {
+    return res
+      .json({
+        error: true,
+        message: "BODY_REQUIRED",
+      })
+      .status(400);
+  }
+
+  const updatePostQuery = `UPDATE 
+  posts SET 
+    posts.updatedAt = CURRENT_TIMESTAMP,
+    posts.body = ? ,
+    posts.categoryId = ?
+  WHERE 
+    posts.id = ? AND 
+    posts.userId = ? AND 
+    posts.deletedAt IS NULL`;
+
+  connection.query(
+    updatePostQuery,
+    [body, categoryId, postId, user.id],
+    function (updatePostError, updatePostResult) {
+      if (updatePostError) {
+        console.log(updatePostError);
+        return res
+          .json({
+            error: true,
+            message: "QUERY_ERROR",
+          })
+          .status(500);
+      }
+
+      if (updatePostResult.affectedRows == 0) {
+        return res
+          .json({
+            error: true,
+            message: "CAN_NOT_UPDATE_POST",
+          })
+          .status(500);
+      }
+      return res
+        .json({
+          error: false,
+          message: "POST_UPDATED",
+        })
+        .status(200);
+    }
+  );
+}
+
+module.exports = { getPosts, getPost, createPost, deletePost, updatePost };
