@@ -9,6 +9,45 @@ const connection = require("../config/db.config");
 Router.get("/posts", tokenMiddleware.verifyToken, postControllers.getPosts);
 
 Router.get(
+  "/posts/pages/:currentPage/limit/:limit",
+  tokenMiddleware.verifyToken,
+  function (req, res) {
+    const { currentPage, limit } = req.params;
+    // test : currentPage > 0
+    const getPostsCountQuery = `select count(*) as "count" from posts`;
+    connection.query(
+      getPostsCountQuery,
+      function (getPostsCountError, getPostsCountResult) {
+        console.log(getPostsCountError);
+        // error test
+        const count = getPostsCountResult[0].count;
+        const pages = Math.ceil(count / limit); //<---- count dyal pages
+        if (pages < currentPage) return res.json({ error: true });
+        const startPosition = (currentPage - 1) * limit; //<---- mnin gha ybda y selecti
+        const endPosition = currentPage * limit;
+        const selectPostsQuery = `select * from posts LIMIT ?, ?`;
+        connection.query(
+          selectPostsQuery,
+          [startPosition, parseInt(limit)],
+          function (selectPostsError, selectPostsResult) {
+            console.log(selectPostsError);
+            // test : query error
+
+            return res.json({
+              count,
+              pages,
+              startPosition,
+              endPosition,
+              results: selectPostsResult,
+            });
+          }
+        );
+      }
+    );
+  }
+);
+
+Router.get(
   "/posts/:postId",
   tokenMiddleware.verifyToken,
   postControllers.getPost
