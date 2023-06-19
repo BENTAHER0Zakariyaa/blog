@@ -1,8 +1,40 @@
 const connection = require("./../config/db.config");
 
 function getPosts(req, res) {
-  const selectPostsQuery =
-    "SELECT posts.*, users.username, categories.name as 'categoryName' FROM posts INNER JOIN users ON users.id = posts.userId INNER JOIN categories ON categories.id = posts.categoryId WHERE posts.deletedAt IS NULL AND users.deletedAt IS NULL";
+  const { filter, orderBy, orderWay } = req.query;
+
+  let where = "";
+
+  if (filter) {
+    where = `   AND  posts.categoryId  = ${filter} `;
+  }
+
+  const options = {
+    0: "id",
+    1: "createdAt",
+    2: "categoryName",
+  };
+
+  let order = "";
+
+  if (orderBy && orderWay && options[orderBy]) {
+    order += ` ORDER BY  ${options[orderBy]} ${
+      orderWay == 0 ? "ASC" : "DESC"
+    } `;
+  }
+
+  const selectPostsQuery = `SELECT 
+      posts.*, 
+      users.username, 
+      categories.name as 'categoryName' 
+    FROM 
+    posts 
+    INNER JOIN users ON 
+      users.id = posts.userId 
+    INNER JOIN categories ON 
+      categories.id = posts.categoryId 
+    WHERE posts.deletedAt IS NULL AND
+     users.deletedAt IS NULL ${where} ${order} `;
 
   connection.query(
     selectPostsQuery,
@@ -26,6 +58,67 @@ function getPosts(req, res) {
     }
   );
 }
+
+function getPostsWithPagination(req, res) {
+  const { currentPage, limit } = req.params;
+  const { filter } = req.query; // => category id  : number
+
+  let where = "";
+
+  if (filter) {
+    where += ` AND  posts.categoryId = ${filter} `;
+  }
+
+  if (currentPage < 0) {
+    return res.json({
+      error: true,
+      message: "CURRENT_PAGE_CAN_NOT_BE_0",
+    });
+  }
+  const getPostsCountQuery = `select count(*) as "count" from posts WHERE 1 ${where}`;
+  console.log(getPostsCountQuery);
+  connection.query(
+    getPostsCountQuery,
+    function (getPostsCountError, getPostsCountResult) {
+      if (getPostsCountError) {
+        console.log(getPostsCountError);
+        return res.json({
+          error: true,
+          message: "QUERY_ERROR",
+        });
+      }
+      const count = getPostsCountResult[0].count;
+      const pages = Math.ceil(count / limit);
+      if (pages < currentPage) {
+        return res.json({ error: true, message: "PAGE_NOT_FOUND" });
+      }
+      const startPosition = (currentPage - 1) * limit;
+      const selectPostsQuery = `select * from posts WHERE 1 ${where} LIMIT ?, ?`;
+
+      connection.query(
+        selectPostsQuery,
+        [startPosition, parseInt(limit)],
+        function (selectPostsError, selectPostsResult) {
+          if (selectPostsError) {
+            console.log(selectPostsError);
+            return res.json({
+              error: true,
+              message: "QUERY_ERROR",
+            });
+          }
+          return res.json({
+            count,
+            numberOfPages: pages,
+            currentPage,
+            limit,
+            posts: selectPostsResult,
+          });
+        }
+      );
+    }
+  );
+}
+
 function getPost(req, res) {
   const { postId } = req.params;
 
@@ -219,4 +312,11 @@ function updatePost(req, res) {
   );
 }
 
-module.exports = { getPosts, getPost, createPost, deletePost, updatePost };
+module.exports = {
+  getPosts,
+  getPost,
+  createPost,
+  deletePost,
+  updatePost,
+  getPostsWithPagination,
+};
